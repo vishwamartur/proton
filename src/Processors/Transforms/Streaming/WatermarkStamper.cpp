@@ -32,9 +32,7 @@ namespace
 void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkStamperParams & params)
 {
     if (!emit_query)
-    {
         return;
-    }
 
     auto emit = emit_query->as<ASTEmitQuery>();
     assert(emit);
@@ -77,6 +75,8 @@ void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkStamperParams & 
 
     if (emit->delay_interval)
         params.delay_interval = extractInterval(emit->delay_interval->as<ASTFunction>());
+
+    params.repeat = emit->repeat;
 }
 }
 
@@ -127,20 +127,17 @@ void WatermarkStamper::preProcess(const Block & header)
     switch (params.mode)
     {
         case EmitMode::Periodic:
-        case EmitMode::PeriodicOnUpdate:
-        {
+        case EmitMode::PeriodicOnUpdate: {
             initPeriodicTimer(params.periodic_interval);
             break;
         }
         case EmitMode::PeriodicWatermark:
-        case EmitMode::PeriodicWatermarkOnUpdate:
-        {
+        case EmitMode::PeriodicWatermarkOnUpdate: {
             initPeriodicTimer(params.periodic_interval);
             [[fallthrough]];
         }
         case EmitMode::Watermark:
-        case EmitMode::WatermarkOnUpdate:
-        {
+        case EmitMode::WatermarkOnUpdate: {
             assert(params.window_params);
             if (!header.has(params.window_params->desc->argument_names[0]))
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "The event time columns not found");
@@ -179,7 +176,7 @@ ALWAYS_INLINE Int64 WatermarkStamper::calculateWatermarkPerRow(Int64 event_ts) c
 {
     assert(event_ts != INVALID_WATERMARK);
     if (params.delay_interval)
-       return addTime(
+        return addTime(
             event_ts,
             params.delay_interval.unit,
             -1 * params.delay_interval.interval,
@@ -196,22 +193,19 @@ void WatermarkStamper::processAfterUnmuted(Chunk & chunk)
     switch (params.mode)
     {
         case EmitMode::Periodic:
-        case EmitMode::PeriodicOnUpdate:
-        {
-            processPeriodic(chunk, /*use_processing_time*/true);
+        case EmitMode::PeriodicOnUpdate: {
+            processPeriodic(chunk, /*use_processing_time*/ true);
             break;
         }
-        case EmitMode::OnUpdate:
-        {
+        case EmitMode::OnUpdate: {
             chunk.setWatermark(MonotonicNanoseconds::now());
             break;
         }
-        case EmitMode::Watermark:
-        {
+        case EmitMode::Watermark: {
             if (max_event_ts != INVALID_WATERMARK)
             {
                 auto muted_watermark_ts = params.window_params->type == WindowType::Session ? calculateWatermarkPerRow(max_event_ts)
-                                                                                        : calculateWatermark(max_event_ts);
+                                                                                            : calculateWatermark(max_event_ts);
                 if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
                 {
                     watermark_ts = muted_watermark_ts;
@@ -221,8 +215,7 @@ void WatermarkStamper::processAfterUnmuted(Chunk & chunk)
             break;
         }
         case EmitMode::PeriodicWatermark:
-        case EmitMode::PeriodicWatermarkOnUpdate:
-        {
+        case EmitMode::PeriodicWatermarkOnUpdate: {
             if (max_event_ts != INVALID_WATERMARK)
             {
                 auto muted_watermark_ts = params.window_params->type == WindowType::Session ? calculateWatermarkPerRow(max_event_ts)
@@ -250,8 +243,7 @@ void WatermarkStamper::processWithMutedWatermark(Chunk & chunk)
                 *std::ranges::max_element(assert_cast<const ColumnDateTime64 &>(*chunk.getColumns()[time_col_pos]).getData()));
         else
             max_event_ts = std::max<Int64>(
-                max_event_ts,
-                *std::ranges::max_element(assert_cast<const ColumnDateTime &>(*chunk.getColumns()[time_col_pos]).getData()));
+                max_event_ts, *std::ranges::max_element(assert_cast<const ColumnDateTime &>(*chunk.getColumns()[time_col_pos]).getData()));
     }
 
     processTimeout(chunk);
@@ -264,34 +256,29 @@ void WatermarkStamper::process(Chunk & chunk)
     {
         case EmitMode::PeriodicOnUpdate:
             [[fallthrough]]; /// Emit only keyed and changed states for aggregating
-        case EmitMode::Periodic:
-        {
+        case EmitMode::Periodic: {
             processPeriodic(chunk, /*use_processing_time=*/true);
             break;
         }
-        case EmitMode::OnUpdate:
-        {
+        case EmitMode::OnUpdate: {
             if (chunk.hasRows())
                 chunk.setWatermark(MonotonicNanoseconds::now());
             break;
         }
-        case EmitMode::Watermark:
-        {
+        case EmitMode::Watermark: {
             processWatermark(chunk);
             break;
         }
         case EmitMode::PeriodicWatermarkOnUpdate:
             [[fallthrough]]; /// Emit only keyed and changed states for aggregating
-        case EmitMode::PeriodicWatermark:
-        {
+        case EmitMode::PeriodicWatermark: {
             processWatermark(chunk);
             /// Clear watermark and set it in `processPeriodic()`
             chunk.clearWatermark();
             processPeriodic(chunk, /*use_processing_time=*/false);
             break;
         }
-        case EmitMode::WatermarkOnUpdate:
-        {
+        case EmitMode::WatermarkOnUpdate: {
             processWatermark(chunk);
             /// Always emit the watermark for each batch of events
             if (chunk.hasRows())
