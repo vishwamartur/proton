@@ -142,6 +142,31 @@ Integrations with other systems:
 * Homebrew https://github.com/timeplus-io/homebrew-timeplus
 * dbt https://github.com/timeplus-io/dbt-proton
 
+* ADBC Driver for Arrow Flight SQL: Timeplus Proton now supports ADBC (Arrow Database Connectivity) driver for Arrow Flight SQL. This allows for efficient data retrieval and manipulation using the Arrow format. The ADBC driver can be used to connect to Arrow Flight SQL servers and execute queries.
+
+### Example usage of ADBC driver:
+
+```cpp
+#include <iostream>
+#include "ADBCDriver.h"
+
+int main() {
+    try {
+        DB::ADBCDriver driver("grpc://localhost:8815");
+        auto table = driver.ExecuteQuery("SELECT * FROM my_table");
+
+        // Process the retrieved data
+        for (const auto& column : table->columns()) {
+            std::cout << column->ToString() << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+    }
+
+    return 0;
+}
+```
+
 ## Documentation
 
 We publish full documentation for Timeplus Proton at [docs.timeplus.com](https://docs.timeplus.com/proton) alongside documentation for Timeplus Enterprise.

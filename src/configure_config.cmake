@@ -123,6 +123,9 @@ endif ()
 if (ENABLE_OPENSSL)
     set(USE_OPENSSL_INTREE 1)
 endif ()
+if (TARGET ch_contrib::adbc)
+    set(USE_ADBC 1)
+endif()
 # Enable / disable aggregation functions
 
 # Enable / disable functions
